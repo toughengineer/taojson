@@ -34,12 +34,16 @@ namespace tao::json::events
          InPlaceVector() {}
          ~InPlaceVector()
          {
-            std::destroy_n( array, std::min( count, count_ ) );
+            std::destroy_n( array, size() );
          }
          void emplace_back( basic_value< Traits >&& v )
          {
             ::new( array + count ) basic_value< Traits >{ std::move( v ) };
             ++count;
+         }
+         size_t size() const
+         {
+            return std::min( count, count_ );
          }
       };
       std::vector< basic_value< Traits > > stack_;
@@ -138,8 +142,7 @@ namespace tao::json::events
          auto& a = stack_.back().get_array();
          if( elements.count == count_ ) {
             a.reserve( count_ + 1 );
-            for( auto& i : elements.array )
-               a.push_back( std::move( i ) );
+            a.resize( count_ );
             ++elements.count;
          }
          a.push_back( std::move( value_ ) );
@@ -149,9 +152,19 @@ namespace tao::json::events
       {
          auto& elements = elements_.back();
          auto& v = stack_.back();
-         if( elements.count <= count_ )
-            v.get_array().assign( std::make_move_iterator( elements.array ),
-                                  std::make_move_iterator( elements.array + elements.count ) );
+         if( elements.count ) {
+            const auto size = elements.size();
+            auto& a = v.get_array();
+            if( a.empty() ) {
+               a.assign( std::make_move_iterator( elements.array ),
+                         std::make_move_iterator( elements.array + size ) );
+            }
+            else {
+               std::copy_n( std::make_move_iterator( elements.array ),
+                            size,
+                            a.begin() );
+            }
+         }
          value_ = std::move( v );
          stack_.pop_back();
          elements_.pop_back();
