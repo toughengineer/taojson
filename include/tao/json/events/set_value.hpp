@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -22,14 +23,27 @@ namespace tao::json::events
    template< template< typename... > class Traits >
    struct set_basic_value
    {
-      static constexpr size_t count_ = 4;
-      struct ArrayElements
+      static constexpr size_t count_ = 42;
+      struct InPlaceVector
       {
-         basic_value< Traits > array[ count_ ];
+         union
+         {
+            basic_value< Traits > array[ count_ ];
+         };
          size_t count = 0;
+         InPlaceVector() {}
+         ~InPlaceVector()
+         {
+            std::destroy_n( array, std::min( count, count_ ) );
+         }
+         void emplace_back( basic_value< Traits >&& v )
+         {
+            ::new( array + count ) basic_value< Traits >{ std::move( v ) };
+            ++count;
+         }
       };
       std::vector< basic_value< Traits > > stack_;
-      std::vector< ArrayElements > elements_;
+      std::deque< InPlaceVector > elements_;
       std::vector< std::string > keys_;
       basic_value< Traits >& value_;
 
@@ -118,8 +132,7 @@ namespace tao::json::events
       {
          auto& elements = elements_.back();
          if( elements.count < count_ ) {
-            elements.array[ elements.count ] = std::move( value_ );
-            ++elements.count;
+            elements.emplace_back( std::move( value_ ) );
             return;
          }
          auto& a = stack_.back().get_array();
