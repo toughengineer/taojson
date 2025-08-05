@@ -24,6 +24,7 @@ namespace tao::json::events
    struct set_basic_value
    {
       static constexpr size_t count_ = 42;
+      static constexpr size_t count_skip_bit_ = size_t{ 1 } << ( std::numeric_limits< size_t >::digits - 1 );
       struct InPlaceVector
       {
          union
@@ -43,7 +44,7 @@ namespace tao::json::events
          }
          size_t size() const
          {
-            return std::min( count, count_ );
+            return count & ~count_skip_bit_;
          }
       };
       std::vector< basic_value< Traits > > stack_;
@@ -128,7 +129,7 @@ namespace tao::json::events
       void begin_array( const std::size_t size )
       {
          begin_array();
-         elements_.back().count = count_ + 1;
+         elements_.back().count |= count_skip_bit_;
          stack_.back().get_array().reserve( size );
       }
 
@@ -143,7 +144,7 @@ namespace tao::json::events
          if( elements.count == count_ ) {
             a.reserve( count_ + 1 );
             a.resize( count_ );
-            ++elements.count;
+            elements.count |= count_skip_bit_;
          }
          a.push_back( std::move( value_ ) );
       }
@@ -152,8 +153,7 @@ namespace tao::json::events
       {
          auto& elements = elements_.back();
          auto& v = stack_.back();
-         if( elements.count ) {
-            const auto size = elements.size();
+         if( const size_t size = elements.size() ) {
             auto& a = v.get_array();
             if( a.empty() ) {
                a.assign( std::make_move_iterator( elements.array ),
